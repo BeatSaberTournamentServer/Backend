@@ -14,11 +14,11 @@ Gamemode: VERSUS / BR
 */
 export default {
     Server: {
-        ip: 'wss://domain.com',
+        ip: 'ws://localhost',
         port: 2223
     },
     TA: {
-        ip: 'ws://danesaber.cf',
+        ip: 'ws://tournamentassistant.net',
         port: 2053,
         password: ''
     },
