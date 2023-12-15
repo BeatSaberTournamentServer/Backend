@@ -1,23 +1,15 @@
 import settings from './settings';
 import { Coordinator, Player, Score } from "./includes/types";
 import { getUsers, HJS, sendModal } from "./includes/functions";
-import { Client, Models, Packets  } from "tournament-assistant-client";
-import { createServer } from 'https';
-import { readFileSync } from 'fs';
+import { Client } from "tournament-assistant-client";
 import { WebSocket, WebSocketServer } from "ws";
 
-const relay_ip = settings.Server.ip || "wss://localhost"
+const relay_ip = settings.Server.ip || "ws://localhost"
 const port = settings.Server.port || 2223;
+const wss = new WebSocketServer({ port });
+const ws = new WebSocket(relay_ip + ":" + port);
 
-const server = createServer({
-    cert: readFileSync('./Keys/cert.pem'),
-    key: readFileSync('./Keys/privkey.pem')
-}).listen(port);
-
-const wss = new WebSocketServer({ server });
-const ws = new WebSocket(relay_ip + ":" + port, { rejectUnauthorized: false });
-
-console.info("Relay server is running on port " + port + " (" +relay_ip +":"+ port + ") - Mode: " + settings.Gamemode);
+console.info("Relay server is running on port " + port + " (" + relay_ip + ":" + port + ") - Mode: " + settings.Gamemode);
 
 wss.on("connection", (ws) => {
     ws.on('message', function message(data, isBinary) {
