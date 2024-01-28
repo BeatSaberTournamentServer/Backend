@@ -269,9 +269,10 @@ taWS.on("realtimeScore", (s) => {
         rhMiss: s.data.rightHand.miss,
         totalMisses: (s.data.notesMissed + s.data.badCuts)
     };
-    setTimeout(() => {
+    /* SyncDelay disabled, as it causes some problems, for some reason. */
+    //setTimeout(() => {
         ws.send(JSON.stringify({ Type: "4", message: userScoring }));
-    }, syncDelay);
+    //}, syncDelay);
 });
 
 taWS.on("matchUpdated", (m) => {
