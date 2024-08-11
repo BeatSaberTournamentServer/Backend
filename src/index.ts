@@ -6,15 +6,18 @@ import { createServer } from 'https';
 import { readFileSync } from 'fs';
 import { WebSocket, WebSocketServer } from "ws";
 
-const relay_ip = settings.Server.ip || "wss://localhost"
+const relay_ip = settings.Server.ip || "ws://localhost"
 const port = settings.Server.port || 2223;
 
+/*
 const server = createServer({
     cert: readFileSync('./Keys/cert.pem'),
     key: readFileSync('./Keys/privkey.pem')
 }).listen(port);
-
 const wss = new WebSocketServer({ server });
+*/
+
+const wss = new WebSocketServer({ port });
 const ws = new WebSocket(relay_ip + ":" + port, { rejectUnauthorized: false });
 
 console.info("Relay server is running on port " + port + " (" + relay_ip + ":" + port + ") - Mode: " + settings.Gamemode);
@@ -63,10 +66,6 @@ wss.on("connection", (ws) => {
                     songFinishModal = jsonObj.enabled;
                     console.log("Song finish modals are now " + (songFinishModal ? "enabled" : "disabled"));
                 }
-                if (jsonObj.command === "delay") {
-                    syncDelaying = jsonObj.delay;
-                    console.log("Sync delay changed to "+ syncDelaying + "ms");
-                }
             }
         } else {
             console.log("Someone tried to pass a non-JSON message to the relay server");
@@ -93,7 +92,6 @@ const taWS = new Client("TAOverlay", {
 const mode: string = settings.Gamemode;
 const debug: boolean = false;
 let songFinishModal: boolean = true;
-let syncDelaying: number = 0;
 let usersArray: Array<any> = [];
 let coordinatorArray: Array<any> = [];
 let matchArray: Array<any> = [];
@@ -281,9 +279,8 @@ taWS.on("realtimeScore", (s) => {
 
     setTimeout(() => {
         ws.send(JSON.stringify({ Type: "4", message: userScoring }));
-    }, (syncDelay/2));
+    }, (syncDelay/2)); //Testing with /2, as coordinators would add more delay to the scoring being sent to the overlay, because of delay from player streams to host main-steam, host main-stream to coordinator
 
-    //Create a new entry in the scoreData array if the user doesn't exist, and update the score if the user does exist
     const index = scoreData.findIndex(x => x.user_id === userId);
     if (index === -1) {
         const userScoring: ScoreData = {
