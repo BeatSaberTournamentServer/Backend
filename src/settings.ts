@@ -15,14 +15,14 @@ Gamemode: VERSUS / BR / PS
 */
 export default {
     Server: {
-        ip: 'ws://localhost',
+        ip: 'wss://localhost',
         port: 2223
     },
     TA: {
-        ip: 'ws://tournamentassistant.net',
+        ip: 'ws://ta.hawk.quest',
         port: 2053,
         password: ''
     },
-    Gamemode: "PS",
-    Modals: false,
+    Gamemode: "VERSUS",
+    Modals: true,
 };

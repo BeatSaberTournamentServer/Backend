@@ -3,13 +3,6 @@ export interface Match {
     coordinator: Coordinator;
     players: Player[];
 }
-
-export interface Coordinator {
-    name: string;
-    type: number;
-    user_id: string;
-    guid: string;
-}
 export interface Player {
     name: string;
     type: number;
@@ -18,6 +11,12 @@ export interface Player {
     team: Team[];
     stream_delay_ms: number | undefined;
     stream_sync_start_ms: number | undefined;
+}
+export interface Coordinator {
+    name: string;
+    type: number;
+    user_id: string;
+    guid: string;
 }
 export interface Team {
     name: string;
@@ -34,11 +33,11 @@ export interface Score {
     bombHits: number;
     wallHits: number;
     maxCombo: number;
-    lhAvg: number[];
+    lhAvg: number[] | string[];
     lhBadCut: number;
     lhHits: number;
     lhMiss: number;
-    rhAvg: number[];
+    rhAvg: number[] | string[];
     rhBadCut: number;
     rhHits: number;
     rhMiss: number;
@@ -50,4 +49,11 @@ export interface ScoreTrackerHand {
     miss?: number;
     badCut?: number;
     avgCut?: number[];
+}
+
+export interface ScoreData {
+    name: string;
+    user_id: string;
+    accuracy: number;
+    score: number;
 }

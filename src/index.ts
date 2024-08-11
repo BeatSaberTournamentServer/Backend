@@ -1,7 +1,7 @@
 import settings from './settings';
-import { Coordinator, Player, Score } from "./includes/types";
+import { Coordinator, Player, Score, ScoreData, Match } from "./includes/types";
 import { getUsers, HJS, sendModal } from "./includes/functions";
-import { Client } from "tournament-assistant-client";
+import { Client, Models, Packets } from "tournament-assistant-client";
 import { createServer } from 'https';
 import { readFileSync } from 'fs';
 import { WebSocket, WebSocketServer } from "ws";
@@ -9,18 +9,15 @@ import { WebSocket, WebSocketServer } from "ws";
 const relay_ip = settings.Server.ip || "wss://localhost"
 const port = settings.Server.port || 2223;
 
-/*
 const server = createServer({
     cert: readFileSync('./Keys/cert.pem'),
     key: readFileSync('./Keys/privkey.pem')
 }).listen(port);
-const wss = new WebSocketServer({ server });
-*/
 
-const wss = new WebSocketServer({ port });
+const wss = new WebSocketServer({ server });
 const ws = new WebSocket(relay_ip + ":" + port, { rejectUnauthorized: false });
 
-console.info("Relay server is running on port " + port + " (" +relay_ip +":"+ port + ") - Mode: " + settings.Gamemode);
+console.info("Relay server is running on port " + port + " (" + relay_ip + ":" + port + ") - Mode: " + settings.Gamemode);
 
 wss.on("connection", (ws) => {
     ws.on('message', function message(data, isBinary) {
@@ -61,6 +58,16 @@ wss.on("connection", (ws) => {
                     );
                 }
             }
+            if (jsonObj.Type === "99") {
+                if (jsonObj.command === "modals") {
+                    songFinishModal = jsonObj.enabled;
+                    console.log("Song finish modals are now " + (songFinishModal ? "enabled" : "disabled"));
+                }
+                if (jsonObj.command === "delay") {
+                    syncDelaying = jsonObj.delay;
+                    console.log("Sync delay changed to "+ syncDelaying + "ms");
+                }
+            }
         } else {
             console.log("Someone tried to pass a non-JSON message to the relay server");
             ws.send(JSON.stringify({ Type: 0, message: "You've sent a non-JSON message to the relay server." }));
@@ -85,10 +92,13 @@ const taWS = new Client("TAOverlay", {
 
 const mode: string = settings.Gamemode;
 const debug: boolean = false;
+let songFinishModal: boolean = true;
+let syncDelaying: number = 0;
 let usersArray: Array<any> = [];
 let coordinatorArray: Array<any> = [];
 let matchArray: Array<any> = [];
 let songData: [string, number] = ["", 0];
+let scoreData: Array<ScoreData> = [];
 
 taWS.on("packet", (p: any) => {
     if (p.has_response && p.response.has_connect) {
@@ -179,8 +189,8 @@ taWS.on("userAdded", (u) => {
                     taWS,
                     "welcome_modal_for_",
                     user.guid,
-                    "Welcome",
-                    "You've joined the " + taWS.ServerSettings.server_name + " server!\n\n Please be aware, that this server is mainly for " + taWS.ServerSettings.server_name + "-use.\n\n",
+                    "Welcome!",
+                    "You've joined the BSTS/YABT server!\n\nPlease be aware, that this server is mainly for BSTS/YABT usage.\n\nIf you're scheduled to play, please wait for your match to start!",
                     true
                 );
             }
@@ -196,7 +206,6 @@ taWS.on("userAdded", (u) => {
         coordinatorArray.push(coordinator);
     }
 });
-
 taWS.on("userUpdated", (u) => {
     if (u.data.client_type === 0) {
         try {
@@ -269,10 +278,68 @@ taWS.on("realtimeScore", (s) => {
         rhMiss: s.data.rightHand.miss,
         totalMisses: (s.data.notesMissed + s.data.badCuts)
     };
-    /* SyncDelay disabled, as it causes some problems, for some reason. */
-    //setTimeout(() => {
+
+    setTimeout(() => {
         ws.send(JSON.stringify({ Type: "4", message: userScoring }));
-    //}, syncDelay);
+    }, (syncDelay/2));
+
+    //Create a new entry in the scoreData array if the user doesn't exist, and update the score if the user does exist
+    const index = scoreData.findIndex(x => x.user_id === userId);
+    if (index === -1) {
+        const userScoring: ScoreData = {
+            name: user?.name || "Unknown",
+            user_id: userId || "Unknown",
+            accuracy: s.data.accuracy,
+            score: s.data.score
+        };
+        scoreData.push(userScoring);
+    } else {
+        scoreData[index].accuracy = s.data.accuracy;
+        scoreData[index].score = s.data.score;
+    }
+});
+
+
+/* 
+export interface ScoreData {
+    name: string;
+    user_id: string;
+    accuracy: number;
+    score: number;
+}
+
+*/
+taWS.on("songFinished", (s) => {
+    if (songFinishModal) {
+        if (mode === "VERSUS") {
+            const userId = s.data.player.user_id;
+            //Get the users sync delay and add 2000ms to it
+            const syncDelay = usersArray.find(x => x.guid === s.data.player.guid)?.stream_delay_ms || 1;
+            setTimeout(() => {
+                try {
+                const match = matchArray.find(x => x.matchData.players.find((y: { user_id: string; }) => y.user_id === userId));
+                const opponent = match.matchData.players.find((x: { user_id: string; }) => x.user_id !== userId);
+
+                const userIndex = scoreData.findIndex(x => x.user_id === userId);
+                const opponentIndex = scoreData.findIndex(x => x.user_id === opponent.user_id);
+
+                const scores = [scoreData[userIndex].score, scoreData[opponentIndex].score];
+                const accuracies = [scoreData[userIndex].accuracy * 100, scoreData[opponentIndex].accuracy * 100];
+
+                const scoreDiff = scores[0] - scores[1];
+                const accDiff = (accuracies[0] - accuracies[1]).toFixed(2);
+
+                const message = "Your stats:\n Score:" + scores[0] + "\nAccuracy: " + accuracies[0].toFixed(2) + "%\n\n Opponents stats:\n Score: " + scores[1] + "\nAccuracy: " + accuracies[1].toFixed(2) + "%\n\n Difference:\n Score: " + Math.abs(scoreDiff) + "\nAccuracy: " + (Math.abs(Number(accDiff))).toFixed(2) + "%";
+
+                sendModal(taWS, "match_finished_for_" + s.data.player.guid, s.data.player.guid, "Map stats", message, true);
+
+                //Remove the scores from the scoreData array
+                } catch (error) {
+                    console.log("Error occured while sending song finish modal", error);
+                }
+            }, 2500);
+        }
+    }
 });
 
 taWS.on("matchUpdated", (m) => {
@@ -294,7 +361,7 @@ taWS.on("matchDeleted", (d) => {
 });
 
 taWS.on("error", (e) => {
-    throw e;
+    // throw e;
 });
 
 process.on("SIGINT", function () {
